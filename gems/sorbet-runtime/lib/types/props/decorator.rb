@@ -58,6 +58,7 @@ class T::Props::Decorator
     enum
     foreign
     foreign_hint_only
+    foreign_shard_key
     ifunset
     immutable
     override
@@ -399,6 +400,7 @@ class T::Props::Decorator
 
     handle_foreign_option(name, cls, rules, rules[:foreign]) if rules[:foreign]
     handle_foreign_hint_only_option(name, cls, rules[:foreign_hint_only]) if rules[:foreign_hint_only]
+    handle_foreign_shard_key_option(name, cls, rules, rules[:foreign_shard_key]) if rules[:foreign_shard_key]
     handle_redaction_option(name, rules[:redaction]) if rules[:redaction]
   end
 
@@ -557,6 +559,37 @@ class T::Props::Decorator
     end
   end
 
+  sig do
+    params(
+      prop_name: T.any(String, Symbol),
+      rules: Rules,
+      foreign: T.untyped,
+    )
+    .void
+    .checked(:never)
+  end
+  private def define_foreign_shard_key_method(prop_name, rules, foreign)
+    fk_method = "#{prop_name}_"
+
+    @class.send(:define_method, fk_method) do |allow_direct_mutation: nil|
+      resolved_foreign, attrs = foreign.call
+      if !resolved_foreign.respond_to?(:load)
+        raise ArgumentError.new(
+          "The `foreign` proc for `#{prop_name}` must return a model class. " \
+          "Got `#{resolved_foreign.inspect}` instead."
+        )
+      end
+      shard_key_fields = attrs[:shard_key_field]
+      shard_key_fields = [shard_key_fields] if !shard_key_fields.is_a?(Array)
+      shard_keys = shard_key_fields.map {|field| self.send(field)}
+      shard_extractor = resolved_foreign.get_shard_extractor
+      opts = {shard_key: shard_extractor.shard_key_for_query({shard_extractor.sharding_props[0] => shard_keys[0]})[0]} # TODO handle multiple shard keys?
+      opts[:allow_direct_mutation] = allow_direct_mutation if !allow_direct_mutation.nil?
+
+      T.unsafe(self.class).decorator.foreign_prop_get(self, prop_name, resolved_foreign, rules, opts)
+    end
+  end
+
   # checked(:never) - Rules hash is expensive to check
   sig do
     params(
@@ -659,6 +692,20 @@ class T::Props::Decorator
     end
 
     define_foreign_method(prop_name, rules, foreign)
+  end
+
+  sig do
+    params(
+      prop_name: Symbol,
+      prop_cls: Module,
+      rules: Rules,
+      foreign: T.untyped,
+    )
+    .void
+    .checked(:never)
+  end
+  private def handle_foreign_shard_key_option(prop_name, prop_cls, rules, foreign)
+    define_foreign_shard_key_method(prop_name, rules, foreign)
   end
 
   # TODO: rename this to props_inherited

@@ -208,15 +208,42 @@ class Opus::Types::Test::Props::PropsTest < Critic::Unit::UnitTest
     end
   end
 
+  class MyShardedTestModel
+    attr_reader :id
+    class ShardExtractor
+      def shard_key_for_query(params)
+        [params['_id'], true]
+      end
+
+      def sharding_props
+        ['_id']
+      end
+    end
+
+    def initialize(id)
+      @id = id
+    end
+
+    def self.load(id, extra={}, opts={})
+      return nil if id.nil? || opts[:shard_key].nil?
+      id == opts[:shard_key] ? MyShardedTestModel.new(id) : nil
+    end
+
+    def self.get_shard_extractor
+      ShardExtractor.new
+    end
+  end
+
   class TestForeignProps
     include T::Props
 
     prop :foreign1, String, foreign: -> {MyTestModel}
     prop :foreign2, T.nilable(String), foreign: -> {MyTestModel}
+    prop :foreign_resharded, String, foreign_shard_key: -> {[MyShardedTestModel, shard_key_field: :foreign1]}
   end
 
   describe 'foreign props' do
-    it 'supports nilable props' do
+    it 'supports foreign_shard_key' do
       obj = TestForeignProps.new
 
       obj.foreign1 = 'test'
@@ -232,6 +259,14 @@ class Opus::Types::Test::Props::PropsTest < Critic::Unit::UnitTest
       test_model = obj.foreign2_
       assert(test_model)
       assert_equal(obj.foreign2, test_model.id)
+
+      obj.foreign_resharded = 'test'
+      test_model = obj.foreign_resharded_
+      assert(test_model)
+      assert_equal(obj.foreign_resharded, test_model.id)
+      obj.foreign_resharded = 'testtest'
+      test_model = obj.foreign_resharded_
+      refute(test_model)
     end
 
     it 'disallows non-proc arguments' do
