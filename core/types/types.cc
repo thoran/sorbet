@@ -140,6 +140,12 @@ TypePtr Types::falsyTypes() {
     return res;
 }
 
+TypePtr Types::nilableStandardError() {
+    static auto standardError = make_type<ClassType>(Symbols::StandardError());
+    static auto res = OrType::make_shared(Types::nilClass(), standardError);
+    return res;
+}
+
 TypePtr Types::dropSubtypesOf(const GlobalState &gs, const TypePtr &from, SymbolRef klass) {
     TypePtr result;
 

@@ -1040,7 +1040,7 @@ core::TypePtr Environment::processBinding(core::Context ctx, cfg::Binding &bind,
                 tp.origins.emplace_back(core::Loc(ctx.file, bind.loc));
             },
             [&](cfg::GetCurrentException *i) {
-                tp.type = core::Types::untypedUntracked();
+                tp.type = core::Types::nilableStandardError();
                 tp.origins.emplace_back(core::Loc(ctx.file, bind.loc));
             },
             [&](cfg::LoadSelf *l) {
@@ -1250,7 +1250,7 @@ core::TypeAndOrigins untypedWithOriginWithLoc(core::Loc loc) {
     // sometimes ends up here...
     // ENFORCE(loc.exists());
     core::TypeAndOrigins ret;
-    ret.type = core::Types::untypedUntracked();
+    ret.type = core::Types::nilableStandardError();
     ret.origins.emplace_back(loc);
     return ret;
 }

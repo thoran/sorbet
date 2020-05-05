@@ -116,6 +116,7 @@ public:
     static TypePtr classClass();
     static TypePtr declBuilderForProcsSingletonClass();
     static TypePtr falsyTypes();
+    static TypePtr nilableStandardError();
 
     static TypePtr dropSubtypesOf(const GlobalState &gs, const TypePtr &from, SymbolRef klass);
     static TypePtr approximateSubtract(const GlobalState &gs, const TypePtr &from, const TypePtr &what);
@@ -466,6 +467,7 @@ private:
      * `make_shared` helper here.
      */
     friend TypePtr Types::falsyTypes();
+    friend TypePtr Types::nilableStandardError();
     friend TypePtr Types::Boolean();
     friend class GlobalSubstitution;
     friend class serialize::SerializerImpl;
