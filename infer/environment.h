@@ -94,6 +94,7 @@ public:
 
 class Environment {
     const core::TypeAndOrigins uninitialized;
+    const core::TypeAndOrigins uninitializedExceptionValue;
 
 public:
     Environment(core::Loc ownerLoc);

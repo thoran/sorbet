@@ -260,7 +260,11 @@ bool Environment::hasType(core::Context ctx, core::LocalVariable symbol) const {
 const core::TypeAndOrigins &Environment::getTypeAndOrigin(core::Context ctx, core::LocalVariable symbol) const {
     auto fnd = vars.find(symbol);
     if (fnd == vars.end()) {
-        return uninitialized;
+        if (symbol._name == core::Names::exceptionValue()) {
+            return uninitializedExceptionValue;
+        } else {
+            return uninitialized;
+        }
     }
     ENFORCE(fnd->second.typeAndOrigins.type.get() != nullptr);
     return fnd->second.typeAndOrigins;
@@ -1241,7 +1245,19 @@ core::TypeAndOrigins nilTypesWithOriginWithLoc(core::Loc loc) {
     return ret;
 }
 
-Environment::Environment(core::Loc ownerLoc) : uninitialized(nilTypesWithOriginWithLoc(ownerLoc)) {}
+core::TypeAndOrigins untypedWithOriginWithLoc(core::Loc loc) {
+    // I'd love to have this, but keepForIDE intentionally has Loc::none() and
+    // sometimes ends up here...
+    // ENFORCE(loc.exists());
+    core::TypeAndOrigins ret;
+    ret.type = core::Types::untypedUntracked();
+    ret.origins.emplace_back(loc);
+    return ret;
+}
+
+Environment::Environment(core::Loc ownerLoc)
+    : uninitialized(nilTypesWithOriginWithLoc(ownerLoc)),
+      uninitializedExceptionValue(untypedWithOriginWithLoc(ownerLoc)) {}
 
 TestedKnowledge TestedKnowledge::empty;
 } // namespace sorbet::infer
