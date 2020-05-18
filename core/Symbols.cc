@@ -133,8 +133,28 @@ bool Symbol::derivesFrom(const GlobalState &gs, SymbolRef sym) const {
 }
 
 SymbolRef Symbol::ref(const GlobalState &gs) const {
-    auto distance = this - gs.symbols.data();
-    return SymbolRef(gs, distance);
+    u4 distance = 0;
+    SymbolRef::Kind type;
+    if (isClassOrModule()) {
+        type = SymbolRef::Kind::ClassOrModule;
+        distance = this - gs.classAndModules.data();
+    } else if (isMethod()) {
+        type = SymbolRef::Kind::Method;
+        distance = this - gs.methods.data();
+    } else if (isField()) {
+        type = SymbolRef::Kind::Field;
+        distance = this - gs.fields.data();
+    } else if (isTypeMember()) {
+        type = SymbolRef::Kind::TypeMember;
+        distance = this - gs.typeMembers.data();
+    } else if (isTypeArgument()) {
+        type = SymbolRef::Kind::TypeArgument;
+        distance = this - gs.typeArguments.data();
+    } else {
+        ENFORCE(false);
+    }
+
+    return SymbolRef(gs, type, distance);
 }
 
 SymbolData SymbolRef::data(GlobalState &gs) const {
@@ -143,8 +163,24 @@ SymbolData SymbolRef::data(GlobalState &gs) const {
 }
 
 SymbolData SymbolRef::dataAllowingNone(GlobalState &gs) const {
-    ENFORCE(_id < gs.symbols.size());
-    return SymbolData(gs.symbols[this->_id], gs);
+    const u4 id = this->id();
+    switch (kind()) {
+        case SymbolRef::Kind::ClassOrModule:
+            ENFORCE(id < gs.classAndModules.size());
+            return SymbolData(gs.classAndModules[id], gs);
+        case SymbolRef::Kind::Method:
+            ENFORCE(id < gs.methods.size());
+            return SymbolData(gs.methods[id], gs);
+        case SymbolRef::Kind::Field:
+            ENFORCE(id < gs.fields.size());
+            return SymbolData(gs.fields[id], gs);
+        case SymbolRef::Kind::TypeArgument:
+            ENFORCE(id < gs.typeArguments.size());
+            return SymbolData(gs.typeArguments[id], gs);
+        case SymbolRef::Kind::TypeMember:
+            ENFORCE(id < gs.typeMembers.size());
+            return SymbolData(gs.typeMembers[id], gs);
+    }
 }
 
 const SymbolData SymbolRef::data(const GlobalState &gs) const {
@@ -153,12 +189,39 @@ const SymbolData SymbolRef::data(const GlobalState &gs) const {
 }
 
 const SymbolData SymbolRef::dataAllowingNone(const GlobalState &gs) const {
-    ENFORCE(_id < gs.symbols.size());
-    return SymbolData(const_cast<Symbol &>(gs.symbols[this->_id]), gs);
+    const u4 id = this->id();
+    switch (kind()) {
+        case SymbolRef::Kind::ClassOrModule:
+            ENFORCE(id < gs.classAndModules.size());
+            return SymbolData(const_cast<Symbol &>(gs.classAndModules[id]), gs);
+        case SymbolRef::Kind::Method:
+            ENFORCE(id < gs.methods.size());
+            return SymbolData(const_cast<Symbol &>(gs.methods[id]), gs);
+        case SymbolRef::Kind::Field:
+            ENFORCE(id < gs.fields.size());
+            return SymbolData(const_cast<Symbol &>(gs.fields[id]), gs);
+        case SymbolRef::Kind::TypeArgument:
+            ENFORCE(id < gs.typeArguments.size());
+            return SymbolData(const_cast<Symbol &>(gs.typeArguments[id]), gs);
+        case SymbolRef::Kind::TypeMember:
+            ENFORCE(id < gs.typeMembers.size());
+            return SymbolData(const_cast<Symbol &>(gs.typeMembers[id]), gs);
+    }
 }
 
 bool SymbolRef::isSynthetic() const {
-    return this->_id < Symbols::MAX_SYNTHETIC_SYMBOLS;
+    switch (this->kind()) {
+        case Kind::ClassOrModule:
+            return id() < Symbols::MAX_SYNTHETIC_CLASS_SYMBOLS;
+        case Kind::Method:
+            return id() < Symbols::MAX_SYNTHETIC_METHOD_SYMBOLS;
+        case Kind::Field:
+            return id() < Symbols::MAX_SYNTHETIC_FIELD_SYMBOLS;
+        case Kind::TypeArgument:
+            return id() < Symbols::MAX_SYNTHETIC_TYPEARGUMENT_SYMBOLS;
+        case Kind::TypeMember:
+            return id() < Symbols::MAX_SYNTHETIC_TYPEMEMBER_SYMBOLS;
+    }
 }
 
 void printTabs(fmt::memory_buffer &to, int count) {
@@ -166,8 +229,8 @@ void printTabs(fmt::memory_buffer &to, int count) {
     fmt::format_to(to, "{}", ident);
 }
 
-SymbolRef::SymbolRef(const GlobalState &from, u4 _id) : _id(_id) {}
-SymbolRef::SymbolRef(GlobalState const *from, u4 _id) : _id(_id) {}
+SymbolRef::SymbolRef(const GlobalState &from, SymbolRef::Kind kind, u4 _id) : _id((_id << 3) | (u4)kind) {}
+SymbolRef::SymbolRef(GlobalState const *from, SymbolRef::Kind kind, u4 _id) : _id((_id << 3) | (u4)kind) {}
 
 string SymbolRef::showRaw(const GlobalState &gs) const {
     return dataAllowingNone(gs)->showRaw(gs);
@@ -1254,10 +1317,17 @@ vector<std::pair<NameRef, SymbolRef>> Symbol::membersStableOrderSlow(const Globa
 
 SymbolData::SymbolData(Symbol &ref, const GlobalState &gs) : DebugOnlyCheck(gs), symbol(ref) {}
 
-SymbolDataDebugCheck::SymbolDataDebugCheck(const GlobalState &gs) : gs(gs), symbolCountAtCreation(gs.symbolsUsed()) {}
+SymbolDataDebugCheck::SymbolDataDebugCheck(const GlobalState &gs)
+    : gs(gs), classAndModulesAtCreation(gs.classAndModulesUsed()), methodsAtCreation(gs.methodsUsed()),
+      fieldsAtCreation(gs.fieldsUsed()), typeArgumentsAtCreation(gs.typeArgumentsUsed()),
+      typeMembersAtCreation(gs.typeMembersUsed()) {}
 
 void SymbolDataDebugCheck::check() const {
-    ENFORCE(symbolCountAtCreation == gs.symbolsUsed());
+    ENFORCE(classAndModulesAtCreation == gs.classAndModulesUsed());
+    ENFORCE(methodsAtCreation == gs.methodsUsed());
+    ENFORCE(fieldsAtCreation == gs.fieldsUsed());
+    ENFORCE(typeArgumentsAtCreation == gs.typeArgumentsUsed());
+    ENFORCE(typeMembersAtCreation == gs.typeMembersUsed());
 }
 
 Symbol *SymbolData::operator->() {

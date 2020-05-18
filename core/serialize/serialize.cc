@@ -631,8 +631,28 @@ Pickler SerializerImpl::pickle(const GlobalState &gs, bool payloadOnly) {
         }
     }
 
-    result.putU4(gs.symbols.size());
-    for (const Symbol &s : gs.symbols) {
+    result.putU4(gs.classAndModules.size());
+    for (const Symbol &s : gs.classAndModules) {
+        pickle(result, s);
+    }
+
+    result.putU4(gs.methods.size());
+    for (const Symbol &s : gs.methods) {
+        pickle(result, s);
+    }
+
+    result.putU4(gs.fields.size());
+    for (const Symbol &s : gs.fields) {
+        pickle(result, s);
+    }
+
+    result.putU4(gs.typeArguments.size());
+    for (const Symbol &s : gs.typeArguments) {
+        pickle(result, s);
+    }
+
+    result.putU4(gs.typeMembers.size());
+    for (const Symbol &s : gs.typeMembers) {
         pickle(result, s);
     }
 
@@ -672,8 +692,16 @@ void SerializerImpl::unpickleGS(UnPickler &p, GlobalState &result) {
     files.clear();
     vector<Name> names(std::move(result.names));
     names.clear();
-    vector<Symbol> symbols(std::move(result.symbols));
-    symbols.clear();
+    vector<Symbol> classAndModules(std::move(result.classAndModules));
+    classAndModules.clear();
+    vector<Symbol> methods(std::move(result.methods));
+    methods.clear();
+    vector<Symbol> fields(std::move(result.fields));
+    fields.clear();
+    vector<Symbol> typeArguments(std::move(result.typeArguments));
+    typeArguments.clear();
+    vector<Symbol> typeMembers(std::move(result.typeMembers));
+    typeMembers.clear();
     vector<pair<unsigned int, unsigned int>> namesByHash(std::move(result.namesByHash));
     namesByHash.clear();
     {
@@ -744,7 +772,11 @@ void SerializerImpl::unpickleGS(UnPickler &p, GlobalState &result) {
         result.fileRefByPath = std::move(fileRefByPath);
         result.files = std::move(files);
         result.names = std::move(names);
-        result.symbols = std::move(symbols);
+        result.classAndModules = std::move(classAndModules);
+        result.methods = std::move(methods);
+        result.fields = std::move(fields);
+        result.typeArguments = std::move(typeArguments);
+        result.typeMembers = std::move(typeMembers);
         result.namesByHash = std::move(namesByHash);
     }
     result.sanityCheck();
@@ -793,7 +825,7 @@ std::vector<u1> Serializer::storePayloadAndNameTable(GlobalState &gs) {
 }
 
 void Serializer::loadGlobalState(GlobalState &gs, const u1 *const data) {
-    ENFORCE(gs.files.empty() && gs.names.empty() && gs.symbols.empty(), "Can't load into a non-empty state");
+    ENFORCE(gs.files.empty() && gs.names.empty() && gs.allSymbolsUsed() == 0, "Can't load into a non-empty state");
     UnPickler p(data, gs.tracer());
     SerializerImpl::unpickleGS(p, gs);
     gs.installIntrinsics();
